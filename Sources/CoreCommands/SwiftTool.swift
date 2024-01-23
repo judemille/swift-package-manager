@@ -39,9 +39,11 @@ import Musl
 #endif
 
 import func TSCBasic.exec
+import class TSCBasic.FileLock
 import protocol TSCBasic.OutputByteStream
 import class TSCBasic.Process
 import enum TSCBasic.ProcessEnv
+import enum TSCBasic.ProcessLockError
 import var TSCBasic.stderrStream
 import class TSCBasic.TerminalController
 import class TSCBasic.ThreadSafeOutputByteStream
@@ -118,6 +120,7 @@ extension SwiftCommand {
         } catch {
             toolError = error
         }
+        try swiftTool.releaseLockIfNeeded()
 
         // wait for all observability items to process
         swiftTool.waitForObservabilityEvents(timeout: .now() + 5)
@@ -395,6 +398,9 @@ public final class SwiftTool {
         if let workspace = _workspace {
             return workspace
         }
+
+        // Before creating the workspace, we need to acquire a lock on the build directory.
+        try self.acquireLockIfNeeded()
 
         if options.resolver.skipDependencyUpdate {
             self.observabilityScope.emit(warning: "'--skip-update' option is deprecated and will be removed in a future release")
@@ -866,6 +872,36 @@ public final class SwiftTool {
         case success
         case failure
     }
+
+    // MARK: - Locking
+
+        private var workspaceLock: FileLock?
+
+        fileprivate func acquireLockIfNeeded() throws {
+            guard workspaceLock == nil else {
+                throw InternalError("acquireLockIfNeeded() called multiple times")
+            }
+            let workspaceLock = try FileLock.prepareLock(fileToLock: self.scratchDirectory)
+
+            // Try a non-blocking lock first so that we can inform the user about an already running SwiftPM.
+            do {
+                try workspaceLock.lock(type: .exclusive, blocking: false)
+            } catch let ProcessLockError.unableToAquireLock(errno) {
+                if errno == EWOULDBLOCK {
+                    self.outputStream.write("Another instance of SwiftPM is already running using '\(self.scratchDirectory)', waiting until that process has finished execution...".utf8)
+                    self.outputStream.flush()
+
+                    // Only if we fail because there's an existing lock we need to acquire again as blocking.
+                    try workspaceLock.lock(type: .exclusive, blocking: true)
+                }
+            }
+
+            self.workspaceLock = workspaceLock
+        }
+
+        fileprivate func releaseLockIfNeeded() {
+            workspaceLock?.unlock()
+        }
 }
 
 /// Returns path of the nearest directory containing the manifest file w.r.t
