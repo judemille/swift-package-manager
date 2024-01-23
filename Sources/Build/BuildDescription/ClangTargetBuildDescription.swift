@@ -227,14 +227,13 @@ public final class ClangTargetBuildDescription {
 
         let buildTriple = self.buildParameters.triple
         // Enable index store, if appropriate.
-        //
-        // This feature is not widely available in OSS clang. So, we only enable
-        // index store for Apple's clang or if explicitly asked to.
-        if ProcessEnv.vars.keys.contains("SWIFTPM_ENABLE_CLANG_INDEX_STORE") {
-            args += self.buildParameters.indexStoreArguments(for: target)
-        } else if buildTriple.isDarwin(),
-                  (try? self.buildParameters.toolchain._isClangCompilerVendorApple()) == true
-        {
+        if try (buildTriple.isDarwin() &&
+            (try? self.buildParameters.toolchain._isClangCompilerVendorApple()) == true) || ClangSupport.checkCompilerFlags(
+            flags: ["-index-store-path", try self.fileSystem.tempDirectory.pathString],
+            toolchain: self.buildParameters.toolchain,
+            triple: self.buildParameters.triple,
+            fileSystem: self.fileSystem
+        ) {
             args += self.buildParameters.indexStoreArguments(for: target)
         }
 

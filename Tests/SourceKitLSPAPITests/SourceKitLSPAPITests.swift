@@ -73,21 +73,3 @@ extension SourceKitLSPAPI.BuildDescription {
         return result
     }
 }
-
-// Since 'contains' is only available in macOS SDKs 13.0 or newer, we need our own little implementation.
-extension RandomAccessCollection where Element: Equatable {
-    fileprivate func firstIndex(of pattern: some RandomAccessCollection<Element>) -> Index? {
-        guard !pattern.isEmpty && count >= pattern.count else {
-            return nil
-        }
-
-        var i = startIndex
-        for _ in 0..<(count - pattern.count + 1) {
-            if self[i...].starts(with: pattern) {
-                return i
-            }
-            i = self.index(after: i)
-        }
-        return nil
-    }
-}

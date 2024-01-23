@@ -16,6 +16,7 @@ add_library(Basics
   Collections/ByteString+Extensions.swift
   Collections/Dictionary+Extensions.swift
   Collections/IdentifiableSet.swift
+  Collections/RandomAccessCollection+Extensions.swift
   Collections/String+Extensions.swift
   Concurrency/ConcurrencyHelpers.swift
   Concurrency/NSLock+Extensions.swift
